@@ -3,6 +3,9 @@ package pingdom
 import (
 	"github.com/op/go-logging"
 	"k8s.io/client-go/1.5/kubernetes"
+	"k8s.io/client-go/1.5/pkg/api"
+	"k8s.io/client-go/1.5/pkg/apis/extensions/v1beta1"
+	"k8s.io/client-go/1.5/pkg/watch"
 	"k8s.io/client-go/1.5/rest"
 )
 
@@ -11,7 +14,13 @@ var (
 )
 
 type Operator struct {
-	kclient *kubernetes.Clientset
+	kclient   *kubernetes.Clientset
+	ingresses map[string]IngressChecks
+}
+
+type IngressChecks struct {
+	Name  string
+	Hosts map[string]int
 }
 
 // New creates a new controller.
@@ -22,7 +31,8 @@ func New(cfg *rest.Config) (*Operator, error) {
 	}
 
 	c := &Operator{
-		kclient: client,
+		kclient:   client,
+		ingresses: make(map[string]IngressChecks),
 	}
 
 	return c, nil
@@ -30,8 +40,70 @@ func New(cfg *rest.Config) (*Operator, error) {
 
 // Run the controller.
 func (c *Operator) Run(stopc <-chan struct{}) error {
-	log.Infof("Operator Run")
+	go func() {
+		c.watchIngresses()
+	}()
+
 	return nil
+}
+
+func (c *Operator) watchIngresses() {
+	w, err := c.kclient.Ingresses(api.NamespaceDefault).Watch(api.ListOptions{})
+	if err != nil {
+		log.Errorf("Error creating ingress watcher: %v", err)
+	}
+
+	for evt := range w.ResultChan() {
+		et := watch.EventType(evt.Type)
+		ing := evt.Object.(*v1beta1.Ingress)
+
+		if et == watch.Added {
+			log.Infof("Ingress %s added", ing.Name)
+			c.addChecks(ing)
+		}
+
+		if et == watch.Modified {
+			log.Infof("Ingress %s updated - NOT YET IMPLEMENTED", ing.Name)
+		}
+
+		if et == watch.Deleted {
+			log.Infof("Ingress %s deleted", ing.Name)
+			c.deleteChecks(ing)
+		}
+	}
+}
+
+func (c *Operator) addChecks(ing *v1beta1.Ingress) {
+	ings := c.ingresses
+	hosts := make(map[string]int)
+
+	for _, r := range ing.Spec.Rules {
+		log.Debugf("Adding Pingdom check for host %s", r.Host)
+		hosts[r.Host] = 1
+	}
+
+	ic := IngressChecks{
+		Name:  ing.Name,
+		Hosts: hosts,
+	}
+
+	ings[ing.Name] = ic
+	c.ingresses = ings
+}
+
+func (c *Operator) deleteChecks(ing *v1beta1.Ingress) {
+	ings := c.ingresses
+
+	if ic, ok := ings[ing.Name]; ok {
+		ic = ings[ing.Name]
+
+		for h, c := range ic.Hosts {
+			log.Debugf("Deleting check %d for host %s", c, h)
+		}
+
+		delete(ings, ing.Name)
+		c.ingresses = ings
+	}
 }
 
 /*
