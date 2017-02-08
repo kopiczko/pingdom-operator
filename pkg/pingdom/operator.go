@@ -1,108 +1,126 @@
 package pingdom
 
 import (
+	"os"
+	"time"
+
 	"github.com/op/go-logging"
+	pdom "github.com/russellcardullo/go-pingdom/pingdom"
+
 	"k8s.io/client-go/1.5/kubernetes"
 	"k8s.io/client-go/1.5/pkg/api"
 	"k8s.io/client-go/1.5/pkg/apis/extensions/v1beta1"
+	"k8s.io/client-go/1.5/pkg/runtime"
 	"k8s.io/client-go/1.5/pkg/watch"
 	"k8s.io/client-go/1.5/rest"
+	"k8s.io/client-go/1.5/tools/cache"
 )
 
 var (
 	log = logging.MustGetLogger("pingdom")
 )
 
+const (
+	resyncPeriod = 5 * time.Minute
+)
+
 type Operator struct {
-	kclient   *kubernetes.Clientset
+	kclient *kubernetes.Clientset
+	pclient *pdom.Client
+
+	ingInf    cache.SharedIndexInformer
 	ingresses map[string]IngressChecks
 }
 
 type IngressChecks struct {
-	Name  string
 	Hosts map[string]int
 }
 
 // New creates a new controller.
 func New(cfg *rest.Config) (*Operator, error) {
-	client, err := kubernetes.NewForConfig(cfg)
+	kclient, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
 
+	pclient := pdom.NewClient(os.Getenv("PINGDOM_USER"), os.Getenv("PINGDOM_PASSWORD"), os.Getenv("PINGDOM_API_KEY"))
+
 	c := &Operator{
-		kclient:   client,
+		kclient:   kclient,
+		pclient:   pclient,
 		ingresses: make(map[string]IngressChecks),
 	}
+
+	c.ingInf = cache.NewSharedIndexInformer(
+		&cache.ListWatch{
+			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
+				return kclient.Ingresses(api.NamespaceAll).List(options)
+			},
+			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
+				return kclient.Ingresses(api.NamespaceAll).Watch(options)
+			},
+		},
+		&v1beta1.Ingress{}, resyncPeriod, cache.Indexers{},
+	)
+
+	c.ingInf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    c.handleAddIngress,
+		DeleteFunc: c.handleDeleteIngress,
+	})
 
 	return c, nil
 }
 
 // Run the controller.
-func (c *Operator) Run(stopc <-chan struct{}) error {
-	go func() {
-		c.watchIngresses()
-	}()
+func (o *Operator) Run(stopc <-chan struct{}) error {
+	go o.ingInf.Run(stopc)
 
+	<-stopc
 	return nil
 }
 
-func (c *Operator) watchIngresses() {
-	w, err := c.kclient.Ingresses(api.NamespaceDefault).Watch(api.ListOptions{})
-	if err != nil {
-		log.Errorf("Error creating ingress watcher: %v", err)
-	}
+func (o *Operator) handleAddIngress(obj interface{}) {
+	ing := obj.(*v1beta1.Ingress)
+	ings := o.ingresses
 
-	for evt := range w.ResultChan() {
-		et := watch.EventType(evt.Type)
-		ing := evt.Object.(*v1beta1.Ingress)
-
-		if et == watch.Added {
-			log.Infof("Ingress %s added", ing.Name)
-			c.addChecks(ing)
-		}
-
-		if et == watch.Modified {
-			log.Infof("Ingress %s updated - NOT YET IMPLEMENTED", ing.Name)
-		}
-
-		if et == watch.Deleted {
-			log.Infof("Ingress %s deleted", ing.Name)
-			c.deleteChecks(ing)
-		}
-	}
-}
-
-func (c *Operator) addChecks(ing *v1beta1.Ingress) {
-	ings := c.ingresses
 	hosts := make(map[string]int)
 
 	for _, r := range ing.Spec.Rules {
-		log.Debugf("Adding Pingdom check for host %s", r.Host)
-		hosts[r.Host] = 1
+		if r.Host != "" {
+			id, err := o.createCheck(r.Host)
+
+			if err == nil {
+				hosts[r.Host] = id
+				log.Debugf("Added Pingdom check %d for host %s", id, r.Host)
+			}
+		}
 	}
 
 	ic := IngressChecks{
-		Name:  ing.Name,
 		Hosts: hosts,
 	}
 
 	ings[ing.Name] = ic
-	c.ingresses = ings
+	o.ingresses = ings
 }
 
-func (c *Operator) deleteChecks(ing *v1beta1.Ingress) {
-	ings := c.ingresses
+func (o *Operator) handleDeleteIngress(obj interface{}) {
+	ing := obj.(*v1beta1.Ingress)
+	ings := o.ingresses
 
 	if ic, ok := ings[ing.Name]; ok {
 		ic = ings[ing.Name]
 
-		for h, c := range ic.Hosts {
-			log.Debugf("Deleting check %d for host %s", c, h)
-		}
+		for host, id := range ic.Hosts {
+			err := o.deleteCheck(id)
 
-		delete(ings, ing.Name)
-		c.ingresses = ings
+			if err == nil {
+				delete(ings, ing.Name)
+				o.ingresses = ings
+
+				log.Debugf("Deleted check %d for host %s", id, host)
+			}
+		}
 	}
 }
 
