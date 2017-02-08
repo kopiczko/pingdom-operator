@@ -67,6 +67,7 @@ func New(cfg *rest.Config) (*Operator, error) {
 	c.ingInf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.handleAddIngress,
 		DeleteFunc: c.handleDeleteIngress,
+		UpdateFunc: c.handleUpdateIngress,
 	})
 
 	return c, nil
@@ -80,6 +81,7 @@ func (o *Operator) Run(stopc <-chan struct{}) error {
 	return nil
 }
 
+// Create Pingdom checks if the ingress has the annotation.
 func (o *Operator) handleAddIngress(obj interface{}) {
 	ing := obj.(*v1beta1.Ingress)
 
@@ -88,11 +90,21 @@ func (o *Operator) handleAddIngress(obj interface{}) {
 	}
 }
 
+// Delete Pingdom checks if the ingress has the annotation.
 func (o *Operator) handleDeleteIngress(obj interface{}) {
 	ing := obj.(*v1beta1.Ingress)
 
 	if _, ok := ing.ObjectMeta.Annotations[pingdomAnnotation]; ok {
 		o.deleteChecks(ing)
+	}
+}
+
+// Update Pingdom checks if the ingress has the annotation.
+func (o *Operator) handleUpdateIngress(old, cur interface{}) {
+	ing := cur.(*v1beta1.Ingress)
+
+	if _, ok := ing.ObjectMeta.Annotations[pingdomAnnotation]; ok {
+		log.Infof("Updating ingress %s - NOT YET IMPLEMENTED", ing.Name)
 	}
 }
 
