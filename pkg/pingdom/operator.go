@@ -34,10 +34,6 @@ type Operator struct {
 	ingInf cache.SharedIndexInformer
 }
 
-type IngressChecks struct {
-	Hosts map[string]int
-}
-
 // New creates a new controller.
 func New(cfg *rest.Config) (*Operator, error) {
 	kclient, err := kubernetes.NewForConfig(cfg)
@@ -108,6 +104,8 @@ func (o *Operator) handleUpdateIngress(old, cur interface{}) {
 	}
 }
 
+// Create a check for each host in the Ingress and annotates it
+// with the checks metadata.
 func (o *Operator) createChecks(ing *v1beta1.Ingress) error {
 	hosts := make(map[string]int)
 
@@ -131,6 +129,7 @@ func (o *Operator) createChecks(ing *v1beta1.Ingress) error {
 		return err
 	}
 
+	// Add annotation with the hosts and check IDs.
 	an := ing.ObjectMeta.Annotations
 	an[checksAnnotation] = string(json)
 
@@ -144,6 +143,7 @@ func (o *Operator) createChecks(ing *v1beta1.Ingress) error {
 	return err
 }
 
+// Delete all checks before the Ingress is deleted.
 func (o *Operator) deleteChecks(ing *v1beta1.Ingress) error {
 	if data, ok := ing.ObjectMeta.Annotations[checksAnnotation]; ok {
 		hosts := make(map[string]int)

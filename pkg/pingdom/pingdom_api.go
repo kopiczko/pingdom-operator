@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	checkInterval = 1
+	checkInterval = 1 // Interval in mins
 )
 
 // Creates a HTTP check for the host and returns the Pingdom ID.
