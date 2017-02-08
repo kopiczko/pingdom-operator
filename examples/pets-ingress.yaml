@@ -1,0 +1,22 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: pets
+  annotations:
+    monitoring.rossfairbanks.com/pingdom: "pets"
+spec:
+  rules:
+    - host: cat.gifs.rossfairbanks.com
+      http:
+        paths:
+          - path:
+            backend:
+              serviceName: cats
+              servicePort: 8080
+    - host: dog.gifs.rossfairbanks.com
+      http:
+        paths:
+          - path:
+            backend:
+              serviceName: dogs
+              servicePort: 8080
