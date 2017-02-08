@@ -1,0 +1,6 @@
+apiVersion: "pingdom.monitoring.rossfairbanks.com/v1alpha1"
+kind: Pingdom
+metadata:
+  name: pets
+spec:
+  checkIntervalMins: 2
