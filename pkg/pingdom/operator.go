@@ -1,6 +1,7 @@
 package pingdom
 
 import (
+	"encoding/json"
 	"os"
 	"time"
 
@@ -22,6 +23,7 @@ var (
 
 const (
 	pingdomAnnotation = "monitoring.rossfairbanks.com/pingdom"
+	checksAnnotation  = "monitoring.rossfairbanks.com/pingdom_checks"
 	resyncPeriod      = 5 * time.Minute
 )
 
@@ -29,8 +31,7 @@ type Operator struct {
 	kclient *kubernetes.Clientset
 	pclient *pdom.Client
 
-	ingInf    cache.SharedIndexInformer
-	ingresses map[string]IngressChecks
+	ingInf cache.SharedIndexInformer
 }
 
 type IngressChecks struct {
@@ -47,9 +48,8 @@ func New(cfg *rest.Config) (*Operator, error) {
 	pclient := pdom.NewClient(os.Getenv("PINGDOM_USER"), os.Getenv("PINGDOM_PASSWORD"), os.Getenv("PINGDOM_API_KEY"))
 
 	c := &Operator{
-		kclient:   kclient,
-		pclient:   pclient,
-		ingresses: make(map[string]IngressChecks),
+		kclient: kclient,
+		pclient: pclient,
 	}
 
 	c.ingInf = cache.NewSharedIndexInformer(
@@ -96,8 +96,7 @@ func (o *Operator) handleDeleteIngress(obj interface{}) {
 	}
 }
 
-func (o *Operator) createChecks(ing *v1beta1.Ingress) {
-	ings := o.ingresses
+func (o *Operator) createChecks(ing *v1beta1.Ingress) error {
 	hosts := make(map[string]int)
 
 	for _, r := range ing.Spec.Rules {
@@ -111,104 +110,46 @@ func (o *Operator) createChecks(ing *v1beta1.Ingress) {
 		}
 	}
 
-	ic := IngressChecks{
-		Hosts: hosts,
+	json, _ := json.Marshal(hosts)
+
+	// Get a fresh copy of the ingress before updating.
+	ing, err := o.kclient.Ingresses(ing.Namespace).Get(ing.Name)
+	if err != nil {
+		log.Errorf("Failed to get ingress: %v", err)
+		return err
 	}
 
-	ings[ing.Name] = ic
-	o.ingresses = ings
+	an := ing.ObjectMeta.Annotations
+	an[checksAnnotation] = string(json)
+
+	ing.ObjectMeta.SetAnnotations(an)
+
+	_, err = o.kclient.Ingresses(ing.Namespace).Update(ing)
+	if err != nil {
+		log.Errorf("Error updating ingress: %v", err)
+	}
+
+	return err
 }
 
-func (o *Operator) deleteChecks(ing *v1beta1.Ingress) {
-	ings := o.ingresses
+func (o *Operator) deleteChecks(ing *v1beta1.Ingress) error {
+	if data, ok := ing.ObjectMeta.Annotations[checksAnnotation]; ok {
+		hosts := make(map[string]int)
 
-	if ic, ok := ings[ing.Name]; ok {
-		ic = ings[ing.Name]
+		err := json.Unmarshal([]byte(data), &hosts)
+		if err != nil {
+			log.Errorf("Error unmarshaling checks json: %v", err)
+			return err
+		}
 
-		for host, id := range ic.Hosts {
+		for host, id := range hosts {
 			err := o.deleteCheck(id)
 
 			if err == nil {
-				delete(ings, ing.Name)
-				o.ingresses = ings
-
 				log.Debugf("Deleted check %d for host %s", id, host)
 			}
 		}
 	}
-}
 
-/*
-
-import (
-	"github.com/rossf7/pingdom-operator/pkg/k8sutil"
-
-	"github.com/op/go-logging"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/1.5/kubernetes"
-	extensionsobj "k8s.io/client-go/1.5/pkg/apis/extensions/v1beta1"
-	"k8s.io/client-go/1.5/rest"
-	"k8s.io/client-go/1.5/tools/cache"
-)
-
-const (
-	tprPingdom = "pingdom." + v1alpha1.TPRGroup
-)
-*/
-
-/*
-// Run the controller.
-func (c *Operator) Run(stopc <-chan struct{}) error {
-	errChan := make(chan error)
-	go func() {
-		if err := c.createTPRs(); err != nil {
-			errChan <- err
-			return
-		}
-		errChan <- nil
-	}()
-
-	select {
-	case err := <-errChan:
-		if err != nil {
-			return err
-		}
-
-		log.Info("TPR API endpoints ready")
-	case <-stopc:
-		return nil
-	}
-
-	<-stopc
 	return nil
 }
-
-// Creates third party resources.
-func (c *Operator) createTPRs() error {
-	tprs := []*extensionsobj.ThirdPartyResource{
-		{
-			ObjectMeta: apimetav1.ObjectMeta{
-				Name: tprPingdom,
-			},
-			Versions: []extensionsobj.APIVersion{
-				{Name: v1alpha1.TPRVersion},
-			},
-			Description: "",
-		},
-	}
-
-	tprClient := c.kclient.Extensions().ThirdPartyResources()
-
-	for _, tpr := range tprs {
-		if _, err := tprClient.Create(tpr); err != nil && !apierrors.IsAlreadyExists(err) {
-			return err
-		}
-
-		log.Infof("TPR created: %s", tpr.Name)
-	}
-
-	// We have to wait for the TPRs to be ready. Otherwise the initial watch may fail.
-	return k8sutil.WaitForTPRReady(c.kclient.CoreV1().RESTClient(), v1alpha1.TPRGroup, v1alpha1.TPRVersion, v1alpha1.TPRPingdomName)
-}
-*/
