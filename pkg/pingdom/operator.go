@@ -21,7 +21,8 @@ var (
 )
 
 const (
-	resyncPeriod = 5 * time.Minute
+	pingdomAnnotation = "monitoring.rossfairbanks.com/pingdom"
+	resyncPeriod      = 5 * time.Minute
 )
 
 type Operator struct {
@@ -81,8 +82,22 @@ func (o *Operator) Run(stopc <-chan struct{}) error {
 
 func (o *Operator) handleAddIngress(obj interface{}) {
 	ing := obj.(*v1beta1.Ingress)
-	ings := o.ingresses
 
+	if _, ok := ing.ObjectMeta.Annotations[pingdomAnnotation]; ok {
+		o.createChecks(ing)
+	}
+}
+
+func (o *Operator) handleDeleteIngress(obj interface{}) {
+	ing := obj.(*v1beta1.Ingress)
+
+	if _, ok := ing.ObjectMeta.Annotations[pingdomAnnotation]; ok {
+		o.deleteChecks(ing)
+	}
+}
+
+func (o *Operator) createChecks(ing *v1beta1.Ingress) {
+	ings := o.ingresses
 	hosts := make(map[string]int)
 
 	for _, r := range ing.Spec.Rules {
@@ -104,8 +119,7 @@ func (o *Operator) handleAddIngress(obj interface{}) {
 	o.ingresses = ings
 }
 
-func (o *Operator) handleDeleteIngress(obj interface{}) {
-	ing := obj.(*v1beta1.Ingress)
+func (o *Operator) deleteChecks(ing *v1beta1.Ingress) {
 	ings := o.ingresses
 
 	if ic, ok := ings[ing.Name]; ok {
