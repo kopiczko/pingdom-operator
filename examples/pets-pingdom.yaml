@@ -3,4 +3,7 @@ kind: Pingdom
 metadata:
   name: pets
 spec:
+  checkType: "DNS"
   checkIntervalMins: 2
+  contactID: 12345
+  alertType: "SMS"
