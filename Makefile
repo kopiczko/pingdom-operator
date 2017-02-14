@@ -14,3 +14,6 @@ docker_build:
 
 clean:
 	rm $(BINARY)
+
+test:
+	go test $(shell go list ./...)

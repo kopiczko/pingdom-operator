@@ -80,9 +80,10 @@ func (o *Operator) Run(stopc <-chan struct{}) error {
 // Create Pingdom checks if the ingress has the annotation.
 func (o *Operator) handleAddIngress(obj interface{}) {
 	ing := obj.(*v1beta1.Ingress)
+	hosts := getIngressHosts(ing)
 
-	if _, ok := ing.ObjectMeta.Annotations[pingdomAnnotation]; ok {
-		o.createChecks(ing)
+	if len(hosts) > 0 {
+		o.createChecks(ing, hosts)
 	}
 }
 
@@ -106,21 +107,19 @@ func (o *Operator) handleUpdateIngress(old, cur interface{}) {
 
 // Create a check for each host in the Ingress and annotates it
 // with the checks metadata.
-func (o *Operator) createChecks(ing *v1beta1.Ingress) error {
-	hosts := make(map[string]int)
+func (o *Operator) createChecks(ing *v1beta1.Ingress, hosts []string) error {
+	phosts := make(map[string]int)
 
-	for _, r := range ing.Spec.Rules {
-		if r.Host != "" {
-			id, err := o.createCheck(r.Host)
+	for _, h := range hosts {
+		id, err := o.createCheck(h)
 
-			if err == nil {
-				hosts[r.Host] = id
-				log.Debugf("Added Pingdom check %d for host %s", id, r.Host)
-			}
+		if err == nil {
+			phosts[h] = id
+			log.Debugf("Added Pingdom check %d for host %s", id, h)
 		}
 	}
 
-	json, _ := json.Marshal(hosts)
+	json, _ := json.Marshal(phosts)
 
 	// Get a fresh copy of the ingress before updating.
 	ing, err := o.kclient.Ingresses(ing.Namespace).Get(ing.Name)
@@ -164,4 +163,19 @@ func (o *Operator) deleteChecks(ing *v1beta1.Ingress) error {
 	}
 
 	return nil
+}
+
+// Returns Ingress hosts if the Ingress has the Pingdom annotation.
+func getIngressHosts(ing *v1beta1.Ingress) []string {
+	hosts := make([]string, 0)
+
+	if _, ok := ing.ObjectMeta.Annotations[pingdomAnnotation]; ok {
+		for _, r := range ing.Spec.Rules {
+			if r.Host != "" {
+				hosts = append(hosts, r.Host)
+			}
+		}
+	}
+
+	return hosts
 }
