@@ -58,3 +58,11 @@ metadata:
 spec:
   checkIntervalMins: 2
 ```
+
+## Run tests
+
+Run the unit tests.
+
+```
+$ make test
+```
