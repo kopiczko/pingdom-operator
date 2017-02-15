@@ -1,0 +1,13 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: tv
+spec:
+  rules:
+    - host: tv.gifs.rossfairbanks.com
+      http:
+        paths:
+          - path:
+            backend:
+              serviceName: tv
+              servicePort: 8080

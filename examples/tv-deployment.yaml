@@ -1,0 +1,35 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: tv
+spec:
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: tv
+      annotations:
+        giphy.com/search: "zoidberg"
+    spec:
+      containers:
+        - name: giphy-demo
+          image: rossf7/giphy-k8s-demo
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ANNOTATIONS_PATH
+              value: "/mnt/annotations"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: podinfo
+              mountPath: /mnt
+              readOnly: false
+      volumes:
+      - name: podinfo
+        downwardAPI:
+          items:
+            - path: "annotations"
+              fieldRef:
+                fieldPath: metadata.annotations
