@@ -36,12 +36,7 @@ type Operator struct {
 }
 
 // New creates a new controller.
-func New(cfg *rest.Config) (*Operator, error) {
-	kclient, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
-
+func New(namespace string, kclient *kubernetes.Clientset, cfg *rest.Config) *Operator {
 	pclient := pdom.NewClient(os.Getenv("PINGDOM_USER"), os.Getenv("PINGDOM_PASSWORD"), os.Getenv("PINGDOM_API_KEY"))
 
 	c := &Operator{
@@ -49,17 +44,19 @@ func New(cfg *rest.Config) (*Operator, error) {
 		pclient: pclient,
 	}
 
+	ingress := kclient.Ingresses(namespace)
+
 	c.ingInf = cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
 				var v1Options v1.ListOptions
 				v1.Convert_api_ListOptions_To_v1_ListOptions(&options, &v1Options, nil)
-				return kclient.Ingresses(api.NamespaceAll).List(v1Options)
+				return ingress.List(v1Options)
 			},
 			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
 				var v1Options v1.ListOptions
 				v1.Convert_api_ListOptions_To_v1_ListOptions(&options, &v1Options, nil)
-				return kclient.Ingresses(api.NamespaceAll).Watch(v1Options)
+				return ingress.Watch(v1Options)
 			},
 		},
 		&v1beta1.Ingress{}, resyncPeriod, cache.Indexers{},
@@ -71,7 +68,7 @@ func New(cfg *rest.Config) (*Operator, error) {
 		UpdateFunc: c.handleUpdateIngress,
 	})
 
-	return c, nil
+	return c
 }
 
 // Run the controller.

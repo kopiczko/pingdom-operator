@@ -8,9 +8,12 @@ import (
 
 	"github.com/op/go-logging"
 	"golang.org/x/sync/errgroup"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/rest"
 
 	"github.com/rossf7/pingdom-operator/pkg/pingdom"
+	"github.com/rossf7/pingdom-operator/pkg/tpr"
 )
 
 var (
@@ -18,25 +21,35 @@ var (
 )
 
 func Main() int {
-	log.Debug("starting operator with k8s v2.0.0")
+	var (
+		config    *rest.Config
+		clientset *kubernetes.Clientset
+	)
+	{
+		var err error
 
-	// For now always use the built in service account.
-	cfg, err := rest.InClusterConfig()
-	if err != nil {
-		log.Errorf("Error getting Kubernetes config: %v", err)
-		return 1
+		// For now always use the built in service account.
+		config, err = rest.InClusterConfig()
+		if err != nil {
+			log.Errorf("Error getting Kubernetes config: %v", err)
+			return 1
+		}
+
+		clientset, err = kubernetes.NewForConfig(config)
+		if err != nil {
+			log.Errorf("Error creating Kubernetes clientset: %v", err)
+			return 1
+		}
 	}
 
-	po, err := pingdom.New(cfg)
-	if err != nil {
-		log.Errorf("Failed to create pingdom operator: %v", err)
-		return 1
-	}
+	po := pingdom.New(v1.NamespaceAll, clientset, config)
+	to := tpr.New(v1.NamespaceAll, clientset, config)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	wg, ctx := errgroup.WithContext(ctx)
 
 	wg.Go(func() error { return po.Run(ctx.Done()) })
+	wg.Go(func() error { return to.Run(ctx.Done()) })
 
 	term := make(chan os.Signal)
 	signal.Notify(term, os.Interrupt, syscall.SIGTERM)
