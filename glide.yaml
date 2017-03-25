@@ -6,6 +6,4 @@ import:
   version: 726b5e2ecdad188823c0c3c731f2b468cba2f4a6
 - package: golang.org/x/sync
 - package: k8s.io/client-go
-  version: v1.5.1
-- package: github.com/emicklei/go-restful
-  version: 89ef8af493ab468a45a42bb0d89a06fccdd2fb22
+  version: v2.0.0

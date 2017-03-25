@@ -8,13 +8,14 @@ import (
 	"github.com/op/go-logging"
 	pdom "github.com/russellcardullo/go-pingdom/pingdom"
 
-	"k8s.io/client-go/1.5/kubernetes"
-	"k8s.io/client-go/1.5/pkg/api"
-	"k8s.io/client-go/1.5/pkg/apis/extensions/v1beta1"
-	"k8s.io/client-go/1.5/pkg/runtime"
-	"k8s.io/client-go/1.5/pkg/watch"
-	"k8s.io/client-go/1.5/rest"
-	"k8s.io/client-go/1.5/tools/cache"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/pkg/api"
+	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	"k8s.io/client-go/pkg/runtime"
+	"k8s.io/client-go/pkg/watch"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 )
 
 var (
@@ -51,10 +52,14 @@ func New(cfg *rest.Config) (*Operator, error) {
 	c.ingInf = cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return kclient.Ingresses(api.NamespaceAll).List(options)
+				var v1Options v1.ListOptions
+				v1.Convert_api_ListOptions_To_v1_ListOptions(&options, &v1Options, nil)
+				return kclient.Ingresses(api.NamespaceAll).List(v1Options)
 			},
 			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return kclient.Ingresses(api.NamespaceAll).Watch(options)
+				var v1Options v1.ListOptions
+				v1.Convert_api_ListOptions_To_v1_ListOptions(&options, &v1Options, nil)
+				return kclient.Ingresses(api.NamespaceAll).Watch(v1Options)
 			},
 		},
 		&v1beta1.Ingress{}, resyncPeriod, cache.Indexers{},

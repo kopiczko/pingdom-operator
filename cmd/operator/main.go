@@ -8,7 +8,7 @@ import (
 
 	"github.com/op/go-logging"
 	"golang.org/x/sync/errgroup"
-	"k8s.io/client-go/1.5/rest"
+	"k8s.io/client-go/rest"
 
 	"github.com/rossf7/pingdom-operator/pkg/pingdom"
 )
@@ -18,6 +18,8 @@ var (
 )
 
 func Main() int {
+	log.Debug("starting operator with k8s v2.0.0")
+
 	// For now always use the built in service account.
 	cfg, err := rest.InClusterConfig()
 	if err != nil {
