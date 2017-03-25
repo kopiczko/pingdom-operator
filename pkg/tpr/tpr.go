@@ -14,41 +14,79 @@ import (
 )
 
 const (
-	tprKind        = "check"
-	tprGroup       = "pingdom.example.com"
-	tprVersion     = "v1aplpha1"
-	tprDescription = "Managed Pingdom uptime checks"
+	tprInitRetries    = 30
+	tprInitRetryDelay = 3 * time.Second
 )
 
-func tprName() string {
-	return fmt.Sprintf("%s.%s", tprKind, tprGroup)
+type tpr struct {
+	clientset kubernetes.Interface
+	rest      rest.Interface
+	namespace string
+
+	kind        string
+	group       string
+	version     string
+	description string
+
+	name string
+
+	endpointList  string
+	endpointWatch string
 }
 
-func createTPR(clientset kubernetes.Interface) error {
-	logger.Infof("creating TPR: %s", tprName())
-	tpr := &v1beta1.ThirdPartyResource{
-		ObjectMeta: v1.ObjectMeta{
-			Name: tprName(),
-		},
-		Versions: []v1beta1.APIVersion{
-			{Name: tprVersion},
-		},
-		Description: tprDescription,
+func newTPR(clientset kubernetes.Interface, kind, group, version, description, namespace string) *tpr {
+	return &tpr{
+		clientset:     clientset,
+		rest:          clientset.CoreV1().RESTClient(),
+		namespace:     namespace,
+		kind:          kind,
+		group:         group,
+		version:       version,
+		description:   description,
+		name:          fmt.Sprintf("%s.%s", tprKind, tprGroup),
+		endpointList:  fmt.Sprintf("/apis/%s/%s/namespaces/%s/%ss"),
+		endpointWatch: fmt.Sprintf("/apis/%s/%s/namespaces/%s/watch/%ss", group, version, namespace, kind),
 	}
-	_, err := clientset.ExtensionsV1beta1().ThirdPartyResources().Create(tpr)
-	if err != nil {
-		if !errors.IsAlreadyExists(err) {
-			return fmt.Errorf("creating TPR failed: %+v", err)
-		}
-	}
+}
 
+func (t *tpr) Name() string { return t.name }
+
+// CreateAndWait create a TPR and waits till it is initialized in the cluster.
+func (t *tpr) CreateAndWait() error {
+	err := t.create()
+	if err != nil {
+		fmt.Errorf("creating TPR: %+v", err)
+	}
+	if err != nil {
+		fmt.Errorf("waiting TPR initialization: %+v", err)
+	}
 	return nil
 }
 
-func waitForTPRInit(restcli rest.Interface, ns string, maxRetries int, retryDelay time.Duration) error {
-	uri := fmt.Sprintf("/apis/%s/%s/namespaces/%s/%ss", tprGroup, tprVersion, ns, tprKind)
-	return util.Retry(retryDelay, maxRetries, func() (bool, error) {
-		_, err := restcli.Get().RequestURI(uri).DoRaw()
+// create is extracted for testing because fake REST client does not work.
+// Therefore waitInit can not be tested.
+func (t *tpr) create() error {
+	tpr := &v1beta1.ThirdPartyResource{
+		ObjectMeta: v1.ObjectMeta{
+			Name: t.name,
+		},
+		Versions: []v1beta1.APIVersion{
+			{Name: t.version},
+		},
+		Description: t.description,
+	}
+	_, err := t.clientset.ExtensionsV1beta1().ThirdPartyResources().Create(tpr)
+	if err != nil {
+		if !errors.IsAlreadyExists(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *tpr) waitInit() error {
+	return util.Retry(tprInitRetryDelay, tprInitRetries, func() (bool, error) {
+		_, err := t.rest.Get().RequestURI(t.endpointList).DoRaw()
 		if err != nil {
 			if errors.IsNotFound(err) {
 				return false, nil

@@ -23,15 +23,19 @@ func newClientset(nodes int) *fake.Clientset {
 func TestCreateTPR(t *testing.T) {
 	clientset := newClientset(3)
 
-	tpr, err := clientset.ExtensionsV1beta1().ThirdPartyResources().List(v1.ListOptions{})
-	assert.Equal(t, 0, len(tpr.Items))
+	tpr := newTPR(clientset, "testkind", "example.com", "v1test1", "test desc", "default")
 
-	err = createTPR(clientset)
+	resp, err := clientset.ExtensionsV1beta1().ThirdPartyResources().List(v1.ListOptions{})
+	assert.Equal(t, 0, len(resp.Items))
+
+	err = tpr.create()
 	assert.Nil(t, err)
 
-	tpr, err = clientset.ExtensionsV1beta1().ThirdPartyResources().List(v1.ListOptions{})
+	resp, err = clientset.ExtensionsV1beta1().ThirdPartyResources().List(v1.ListOptions{})
 	assert.Nil(t, err)
-	assert.Equal(t, 1, len(tpr.Items))
-	assert.Equal(t, "check.pingdom.example.com", tpr.Items[0].Name)
-	assert.Equal(t, tprDescription, tpr.Items[0].Description)
+	assert.Equal(t, 1, len(resp.Items))
+	assert.Equal(t, tpr.Name(), resp.Items[0].Name)
+	assert.Equal(t, 1, len(resp.Items[0].Versions))
+	assert.Equal(t, "v1test1", resp.Items[0].Versions[0].Name)
+	assert.Equal(t, "test desc", resp.Items[0].Description)
 }

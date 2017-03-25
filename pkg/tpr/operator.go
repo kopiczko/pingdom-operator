@@ -1,7 +1,6 @@
 package tpr
 
 import (
-	"fmt"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -14,8 +13,10 @@ import (
 const (
 	initRetryDelay = 10 * time.Second
 
-	tprInitRetries    = 30
-	tprInitRetryDelay = 3 * time.Second
+	tprKind        = "check"
+	tprGroup       = "pingdom.example.com"
+	tprVersion     = "v1aplpha1"
+	tprDescription = "Managed Pingdom uptime checks"
 )
 
 var (
@@ -23,14 +24,16 @@ var (
 )
 
 type Operator struct {
-	Namespace string
+	tpr       *tpr
+	namespace string
 	clientset kubernetes.Interface
 	config    *rest.Config
 }
 
 func New(namespace string, clientset kubernetes.Interface, config *rest.Config) *Operator {
 	return &Operator{
-		Namespace: namespace,
+		tpr:       newTPR(clientset, tprKind, tprGroup, tprVersion, tprDescription, namespace),
+		namespace: namespace,
 		clientset: clientset,
 		config:    config,
 	}
@@ -49,13 +52,6 @@ func (o *Operator) Run(stopc <-chan struct{}) error {
 }
 
 func (o *Operator) initResources() error {
-	err := createTPR(o.clientset)
-	if err != nil {
-		return fmt.Errorf("failed to create TPR: %+v", err)
-	}
-	err = waitForTPRInit(o.clientset.CoreV1().RESTClient(), o.Namespace, tprInitRetries, tprInitRetryDelay)
-	if err != nil {
-		return fmt.Errorf("failed to wait for TPR: %+v", err)
-	}
-	return nil
+	logger.Infof("creating TPR: %s", o.tpr.Name())
+	return o.tpr.CreateAndWait()
 }
