@@ -16,4 +16,4 @@ clean:
 	rm $(BINARY)
 
 test:
-	go test $(shell go list ./...)
+	go test $(shell glide novendor)
