@@ -21,15 +21,10 @@ var (
 )
 
 func Main() int {
-	var (
-		config    *rest.Config
-		clientset *kubernetes.Clientset
-	)
+	var clientset *kubernetes.Clientset
 	{
-		var err error
-
 		// For now always use the built in service account.
-		config, err = rest.InClusterConfig()
+		config, err := rest.InClusterConfig()
 		if err != nil {
 			log.Errorf("Error getting Kubernetes config: %v", err)
 			return 1
@@ -42,8 +37,8 @@ func Main() int {
 		}
 	}
 
-	po := pingdom.New(v1.NamespaceAll, clientset, config)
-	to := tpr.New(v1.NamespaceAll, clientset, config)
+	po := pingdom.New(v1.NamespaceAll, clientset)
+	to := tpr.New(v1.NamespaceAll, clientset)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	wg, ctx := errgroup.WithContext(ctx)

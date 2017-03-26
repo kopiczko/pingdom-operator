@@ -6,8 +6,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
-	"k8s.io/client-go/rest"
-
 	logging "github.com/op/go-logging"
 )
 
@@ -28,15 +26,13 @@ type Operator struct {
 	tpr       *tpr
 	namespace string
 	clientset kubernetes.Interface
-	config    *rest.Config
 }
 
-func New(namespace string, clientset kubernetes.Interface, config *rest.Config) *Operator {
+func New(namespace string, clientset kubernetes.Interface) *Operator {
 	return &Operator{
 		tpr:       newTPR(clientset, tprKind, tprGroup, tprVersion, tprDescription, namespace),
 		namespace: namespace,
 		clientset: clientset,
-		config:    config,
 	}
 }
 

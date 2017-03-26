@@ -14,7 +14,6 @@ import (
 	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	"k8s.io/client-go/pkg/runtime"
 	"k8s.io/client-go/pkg/watch"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -36,7 +35,7 @@ type Operator struct {
 }
 
 // New creates a new controller.
-func New(namespace string, kclient *kubernetes.Clientset, cfg *rest.Config) *Operator {
+func New(namespace string, kclient *kubernetes.Clientset) *Operator {
 	pclient := pdom.NewClient(os.Getenv("PINGDOM_USER"), os.Getenv("PINGDOM_PASSWORD"), os.Getenv("PINGDOM_API_KEY"))
 
 	c := &Operator{
