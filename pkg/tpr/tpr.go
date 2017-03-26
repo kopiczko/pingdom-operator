@@ -35,6 +35,9 @@ type tpr struct {
 }
 
 func newTPR(clientset kubernetes.Interface, kind, group, version, description, namespace string) *tpr {
+	if len(namespace) > 0 {
+		namespace = "/namespaces/" + namespace
+	}
 	return &tpr{
 		clientset:     clientset,
 		rest:          clientset.CoreV1().RESTClient(),
@@ -44,8 +47,8 @@ func newTPR(clientset kubernetes.Interface, kind, group, version, description, n
 		version:       version,
 		description:   description,
 		name:          fmt.Sprintf("%s.%s", tprKind, tprGroup),
-		endpointList:  fmt.Sprintf("/apis/%s/%s/namespaces/%s/%ss"),
-		endpointWatch: fmt.Sprintf("/apis/%s/%s/namespaces/%s/watch/%ss", group, version, namespace, kind),
+		endpointList:  fmt.Sprintf("/apis/%s/%s%s/%ss", group, version, namespace, kind),
+		endpointWatch: fmt.Sprintf("/apis/%s/%s%s/watch/%ss", group, version, namespace, kind),
 	}
 }
 
