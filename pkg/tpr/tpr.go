@@ -57,6 +57,7 @@ func (t *tpr) CreateAndWait() error {
 	if err != nil {
 		fmt.Errorf("creating TPR: %+v", err)
 	}
+	err = t.waitInit()
 	if err != nil {
 		fmt.Errorf("waiting TPR initialization: %+v", err)
 	}
