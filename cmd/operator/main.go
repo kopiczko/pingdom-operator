@@ -37,8 +37,9 @@ func Main() int {
 		}
 	}
 
-	to := tpr.New(v1.NamespaceAll, clientset, tpr.NewStore())
-	po := pingdom.New(v1.NamespaceAll, clientset)
+	tprStore := tpr.NewStore()
+	to := tpr.New(v1.NamespaceAll, clientset, tprStore)
+	po := pingdom.New(v1.NamespaceAll, clientset, tprStore)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	wg, ctx := errgroup.WithContext(ctx)

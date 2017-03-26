@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/op/go-logging"
+	"github.com/rossf7/pingdom-operator/pkg/tpr"
 	pdom "github.com/russellcardullo/go-pingdom/pingdom"
 
 	"k8s.io/client-go/kubernetes"
@@ -32,6 +33,7 @@ const (
 type Operator struct {
 	kclient *kubernetes.Clientset
 	pclient *pdom.Client
+	store   *tpr.Store
 
 	eventCnt uint64
 
@@ -39,12 +41,13 @@ type Operator struct {
 }
 
 // New creates a new controller.
-func New(namespace string, kclient *kubernetes.Clientset) *Operator {
+func New(namespace string, kclient *kubernetes.Clientset, store *tpr.Store) *Operator {
 	pclient := pdom.NewClient(os.Getenv("PINGDOM_USER"), os.Getenv("PINGDOM_PASSWORD"), os.Getenv("PINGDOM_API_KEY"))
 
 	c := &Operator{
 		kclient: kclient,
 		pclient: pclient,
+		store:   store,
 	}
 
 	ingress := kclient.Ingresses(namespace)
@@ -85,7 +88,8 @@ func (o *Operator) Run(stopc <-chan struct{}) error {
 // Create Pingdom checks if the ingress has the annotation.
 func (o *Operator) handleAddIngress(obj interface{}) {
 	ing := obj.(*v1beta1.Ingress)
-	if !annotated(ing) {
+	checkName, ok := annotation(ing)
+	if !ok {
 		return
 	}
 
@@ -94,18 +98,25 @@ func (o *Operator) handleAddIngress(obj interface{}) {
 	defer log.Debugf("%s end", logp)
 
 	hosts := getIngressHosts(ing)
-	if len(hosts) > 0 {
-		err := o.createChecks(logp, ing, hosts)
-		if err != nil {
-			log.Errorf("%s error: %v", logp, err)
-		}
+	if len(hosts) == 0 {
+		return
+	}
+
+	checkSpec, ok := o.store.Get(ing.Namespace, checkName)
+	if !ok {
+		checkSpec = defaultCheckSpec
+	}
+
+	err := o.createChecks(logp, ing, hosts, checkSpec)
+	if err != nil {
+		log.Errorf("%s error: %v", logp, err)
 	}
 }
 
 // Delete Pingdom checks if the ingress has the annotation.
 func (o *Operator) handleDeleteIngress(obj interface{}) {
 	ing := obj.(*v1beta1.Ingress)
-	if !annotated(ing) {
+	if _, ok := annotation(ing); !ok {
 		return
 	}
 
@@ -122,7 +133,8 @@ func (o *Operator) handleDeleteIngress(obj interface{}) {
 // Update Pingdom checks if the ingress has the annotation.
 func (o *Operator) handleUpdateIngress(oldObj, newObj interface{}) {
 	old, new := oldObj.(*v1beta1.Ingress), newObj.(*v1beta1.Ingress)
-	if !annotated(new) {
+	// TODO at least remove checks if new is not annotated and pass checks otherwise
+	if _, ok := annotation(new); !ok {
 		return
 	}
 
@@ -133,11 +145,11 @@ func (o *Operator) handleUpdateIngress(oldObj, newObj interface{}) {
 
 // Create a check for each host in the Ingress and annotates it
 // with the checks metadata.
-func (o *Operator) createChecks(logp string, ing *v1beta1.Ingress, hosts []string) error {
+func (o *Operator) createChecks(logp string, ing *v1beta1.Ingress, hosts []string, checkSpec tpr.Spec) error {
 	phosts := make(map[string]int)
 
 	for _, h := range hosts {
-		id, err := o.createCheck(h)
+		id, err := o.createCheck(h, checkSpec)
 		if err == nil {
 			phosts[h] = id
 			log.Debugf("%s added Pingdom check %d for host %s", logp, id, h)
@@ -191,9 +203,9 @@ func (o *Operator) deleteChecks(logp string, ing *v1beta1.Ingress) error {
 	return nil
 }
 
-func annotated(ing *v1beta1.Ingress) bool {
-	_, ok := ing.ObjectMeta.Annotations[pingdomAnnotation]
-	return ok
+func annotation(ing *v1beta1.Ingress) (v string, ok bool) {
+	v, ok = ing.ObjectMeta.Annotations[pingdomAnnotation]
+	return
 }
 
 // Returns Ingress hosts

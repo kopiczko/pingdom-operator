@@ -1,16 +1,19 @@
 package pingdom
 
 import (
+	"github.com/rossf7/pingdom-operator/pkg/tpr"
 	pdom "github.com/russellcardullo/go-pingdom/pingdom"
 )
 
-const (
-	checkInterval = 1 // Interval in mins
+var (
+	defaultCheckSpec = tpr.Spec{
+		RetryInterval: 1,
+	}
 )
 
 // Creates a HTTP check for the host and returns the Pingdom ID.
-func (c *Operator) createCheck(host string) (int, error) {
-	hc := pdom.HttpCheck{Name: host, Hostname: host, Resolution: checkInterval}
+func (c *Operator) createCheck(host string, checkSpec tpr.Spec) (int, error) {
+	hc := pdom.HttpCheck{Name: host, Hostname: host, Resolution: checkSpec.RetryInterval}
 	check, err := c.pclient.Checks.Create(&hc)
 	if err != nil {
 		log.Errorf("Failed to create check for host %s: %v", host, err)
