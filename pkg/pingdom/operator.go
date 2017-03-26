@@ -2,7 +2,9 @@ package pingdom
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/op/go-logging"
@@ -30,6 +32,8 @@ const (
 type Operator struct {
 	kclient *kubernetes.Clientset
 	pclient *pdom.Client
+
+	eventCnt uint64
 
 	ingInf cache.SharedIndexInformer
 }
@@ -81,102 +85,124 @@ func (o *Operator) Run(stopc <-chan struct{}) error {
 // Create Pingdom checks if the ingress has the annotation.
 func (o *Operator) handleAddIngress(obj interface{}) {
 	ing := obj.(*v1beta1.Ingress)
-	hosts := getIngressHosts(ing)
+	if !annotated(ing) {
+		return
+	}
 
+	logp := fmt.Sprintf("handleAddIngress[%d]", atomic.AddUint64(&o.eventCnt, 1))
+	log.Debugf("%s ingress=%+v", logp, ing)
+	defer log.Debugf("%s end", logp)
+
+	hosts := getIngressHosts(ing)
 	if len(hosts) > 0 {
-		o.createChecks(ing, hosts)
+		err := o.createChecks(logp, ing, hosts)
+		if err != nil {
+			log.Errorf("%s error: %v", logp, err)
+		}
 	}
 }
 
 // Delete Pingdom checks if the ingress has the annotation.
 func (o *Operator) handleDeleteIngress(obj interface{}) {
 	ing := obj.(*v1beta1.Ingress)
+	if !annotated(ing) {
+		return
+	}
 
-	if _, ok := ing.ObjectMeta.Annotations[pingdomAnnotation]; ok {
-		o.deleteChecks(ing)
+	logp := fmt.Sprintf("handleDeleteIngress[%d]", atomic.AddUint64(&o.eventCnt, 1))
+	log.Debugf("%s ingress=%+v", logp, ing)
+	defer log.Debugf("%s end", logp)
+
+	err := o.deleteChecks(logp, ing)
+	if err != nil {
+		log.Debugf("%s error: %v", logp, err)
 	}
 }
 
 // Update Pingdom checks if the ingress has the annotation.
-func (o *Operator) handleUpdateIngress(old, cur interface{}) {
-	ing := cur.(*v1beta1.Ingress)
-
-	if _, ok := ing.ObjectMeta.Annotations[pingdomAnnotation]; ok {
-		log.Infof("Updating ingress %s - NOT YET IMPLEMENTED", ing.Name)
+func (o *Operator) handleUpdateIngress(oldObj, newObj interface{}) {
+	old, new := oldObj.(*v1beta1.Ingress), newObj.(*v1beta1.Ingress)
+	if !annotated(new) {
+		return
 	}
+
+	id := atomic.AddUint64(&o.eventCnt, 1)
+	log.Debugf("handleUpdateIngress[%d] NOT YET IMPLEMENTED old=%+v new=%+v", id, old, new)
+	defer log.Debugf("handleUpdateIngress[%d] end", id)
 }
 
 // Create a check for each host in the Ingress and annotates it
 // with the checks metadata.
-func (o *Operator) createChecks(ing *v1beta1.Ingress, hosts []string) error {
+func (o *Operator) createChecks(logp string, ing *v1beta1.Ingress, hosts []string) error {
 	phosts := make(map[string]int)
 
 	for _, h := range hosts {
 		id, err := o.createCheck(h)
-
 		if err == nil {
 			phosts[h] = id
-			log.Debugf("Added Pingdom check %d for host %s", id, h)
+			log.Debugf("%s added Pingdom check %d for host %s", logp, id, h)
+		} else {
+			log.Errorf("%s error: adding Pingdom check for host %s", logp, h)
 		}
 	}
 
-	json, _ := json.Marshal(phosts)
+	bytes, _ := json.Marshal(phosts)
+	data := string(bytes)
 
 	// Get a fresh copy of the ingress before updating.
 	ing, err := o.kclient.Ingresses(ing.Namespace).Get(ing.Name)
 	if err != nil {
-		log.Errorf("Failed to get ingress: %v", err)
-		return err
+		return fmt.Errorf("getting ingress: %v", err)
 	}
 
 	// Add annotation with the hosts and check IDs.
-	an := ing.ObjectMeta.Annotations
-	an[checksAnnotation] = string(json)
-
-	ing.ObjectMeta.SetAnnotations(an)
+	ing.ObjectMeta.Annotations[checksAnnotation] = data
 
 	_, err = o.kclient.Ingresses(ing.Namespace).Update(ing)
 	if err != nil {
-		log.Errorf("Error updating ingress: %v", err)
+		return fmt.Errorf("updating ingress: %v", err)
 	}
 
-	return err
+	return nil
 }
 
 // Delete all checks before the Ingress is deleted.
-func (o *Operator) deleteChecks(ing *v1beta1.Ingress) error {
-	if data, ok := ing.ObjectMeta.Annotations[checksAnnotation]; ok {
-		hosts := make(map[string]int)
+func (o *Operator) deleteChecks(logp string, ing *v1beta1.Ingress) error {
+	data, ok := ing.ObjectMeta.Annotations[checksAnnotation]
+	if !ok {
+		return nil
+	}
 
-		err := json.Unmarshal([]byte(data), &hosts)
-		if err != nil {
-			log.Errorf("Error unmarshaling checks json: %v", err)
-			return err
-		}
+	var hosts map[string]int
+	err := json.Unmarshal([]byte(data), &hosts)
+	if err != nil {
+		return fmt.Errorf("unmarshaling checks json: %v", err)
+	}
 
-		for host, id := range hosts {
-			err := o.deleteCheck(id)
-
-			if err == nil {
-				log.Debugf("Deleted check %d for host %s", id, host)
-			}
+	for host, id := range hosts {
+		err := o.deleteCheck(id)
+		if err == nil {
+			log.Debugf("%s deleted check %d for host %s", logp, id, host)
+		} else {
+			log.Errorf("%s error deleting check %d for host %s", logp, id, host)
 		}
 	}
 
 	return nil
 }
 
-// Returns Ingress hosts if the Ingress has the Pingdom annotation.
+func annotated(ing *v1beta1.Ingress) bool {
+	_, ok := ing.ObjectMeta.Annotations[pingdomAnnotation]
+	return ok
+}
+
+// Returns Ingress hosts
 func getIngressHosts(ing *v1beta1.Ingress) []string {
 	hosts := make([]string, 0)
-
-	if _, ok := ing.ObjectMeta.Annotations[pingdomAnnotation]; ok {
-		for _, r := range ing.Spec.Rules {
-			if r.Host != "" {
-				hosts = append(hosts, r.Host)
-			}
+	for _, r := range ing.Spec.Rules {
+		if r.Host != "" {
+			hosts = append(hosts, r.Host)
 		}
 	}
-
 	return hosts
 }
