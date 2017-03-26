@@ -115,7 +115,7 @@ func (o *Operator) handleDeleteIngress(obj interface{}) {
 
 	err := o.deleteChecks(logp, ing)
 	if err != nil {
-		log.Debugf("%s error: %v", logp, err)
+		log.Errorf("%s error: %v", logp, err)
 	}
 }
 
