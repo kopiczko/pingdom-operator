@@ -1,6 +1,7 @@
 package tpr
 
 import (
+	"sync/atomic"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -26,13 +27,17 @@ type Operator struct {
 	tpr       *tpr
 	namespace string
 	clientset kubernetes.Interface
+	store     *Store
+	eventCnt  uint64
 }
 
-func New(namespace string, clientset kubernetes.Interface) *Operator {
+func New(namespace string, clientset kubernetes.Interface, store *Store) *Operator {
 	return &Operator{
 		tpr:       newTPR(clientset, tprKind, tprGroup, tprVersion, tprDescription, namespace),
 		namespace: namespace,
 		clientset: clientset,
+		store:     store,
+		eventCnt:  0,
 	}
 }
 
@@ -49,15 +54,24 @@ func (o *Operator) Run(stopCh <-chan struct{}) error {
 	watcher := o.tpr.Watcher(pingdomCheckFuncs{}, cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			check := obj.(*PingdomCheck)
-			logger.Debugf("AddFund: %+v", check)
+			id := atomic.AddUint64(&o.eventCnt, 1)
+			logger.Debugf("AddFunc[%d] check=%+v", id, check)
+			defer logger.Debugf("AddFunc[%d] end", id)
+			o.store.set(check)
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			old, new := oldObj.(*PingdomCheck), newObj.(*PingdomCheck)
-			logger.Debugf("UpdateFunc: old:%+v new:%+v", old, new)
+			id := atomic.AddUint64(&o.eventCnt, 1)
+			logger.Debugf("UpdateFunc[%d]: old=%+v new=%+v", id, old, new)
+			defer logger.Debugf("UpdateFunc[%d] end", id)
+			o.store.set(new)
 		},
 		DeleteFunc: func(obj interface{}) {
 			check := obj.(*PingdomCheck)
-			logger.Debugf("DeleteFund: %+v", check)
+			id := atomic.AddUint64(&o.eventCnt, 1)
+			logger.Debugf("DeleteFund[%d] check=%+v", id, check)
+			defer logger.Debugf("DeleteFund[%d] end", id)
+			o.store.delete(check)
 		},
 	})
 

@@ -37,14 +37,14 @@ func Main() int {
 		}
 	}
 
+	to := tpr.New(v1.NamespaceAll, clientset, tpr.NewStore())
 	po := pingdom.New(v1.NamespaceAll, clientset)
-	to := tpr.New(v1.NamespaceAll, clientset)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	wg, ctx := errgroup.WithContext(ctx)
 
-	wg.Go(func() error { return po.Run(ctx.Done()) })
 	wg.Go(func() error { return to.Run(ctx.Done()) })
+	wg.Go(func() error { return po.Run(ctx.Done()) })
 
 	term := make(chan os.Signal)
 	signal.Notify(term, os.Interrupt, syscall.SIGTERM)
