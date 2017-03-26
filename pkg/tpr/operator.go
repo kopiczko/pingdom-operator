@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 
 	"k8s.io/client-go/rest"
 
@@ -39,7 +40,7 @@ func New(namespace string, clientset kubernetes.Interface, config *rest.Config) 
 	}
 }
 
-func (o *Operator) Run(stopc <-chan struct{}) error {
+func (o *Operator) Run(stopCh <-chan struct{}) error {
 	for {
 		err := o.initResources()
 		if err == nil {
@@ -48,6 +49,23 @@ func (o *Operator) Run(stopc <-chan struct{}) error {
 		logger.Errorf("Failed to init resources: %+v. retrying...", err)
 		<-time.After(initRetryDelay)
 	}
+
+	watcher := o.tpr.Watcher(pingdomCheckFuncs{}, cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			check := obj.(*PingdomCheck)
+			logger.Debugf("AddFund: %+v", check)
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			old, new := oldObj.(*PingdomCheck), newObj.(*PingdomCheck)
+			logger.Debugf("UpdateFunc: old:%+v new:%+v", old, new)
+		},
+		DeleteFunc: func(obj interface{}) {
+			check := obj.(*PingdomCheck)
+			logger.Debugf("DeleteFund: %+v", check)
+		},
+	})
+
+	watcher.Run(stopCh)
 	return nil
 }
 
