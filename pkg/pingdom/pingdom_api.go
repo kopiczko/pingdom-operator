@@ -7,13 +7,13 @@ import (
 
 var (
 	defaultCheckSpec = tpr.Spec{
-		RetryInterval: 1,
+		Resolution: 1,
 	}
 )
 
 // Creates a HTTP check for the host and returns the Pingdom ID.
 func (c *Operator) createCheck(host string, checkSpec tpr.Spec) (int, error) {
-	hc := pdom.HttpCheck{Name: host, Hostname: host, Resolution: checkSpec.RetryInterval}
+	hc := pdom.HttpCheck{Name: host, Hostname: host, Resolution: checkSpec.Resolution}
 	check, err := c.pclient.Checks.Create(&hc)
 	if err != nil {
 		return -1, err

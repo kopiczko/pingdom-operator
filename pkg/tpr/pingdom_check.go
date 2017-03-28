@@ -8,7 +8,7 @@ import (
 
 type Spec struct {
 	// Interval in minutes.
-	RetryInterval int `json:"retryInterval"`
+	Resolution int `json:"resolution"`
 }
 
 /*

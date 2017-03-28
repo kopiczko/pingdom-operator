@@ -3,4 +3,4 @@ kind: Check
 metadata:
   name: check5
 spec:
-  retryInterval: 5
+  resolution: 5
