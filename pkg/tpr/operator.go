@@ -81,5 +81,9 @@ func (o *Operator) Run(stopCh <-chan struct{}) error {
 
 func (o *Operator) initResources() error {
 	logger.Infof("creating TPR: %s", o.tpr.Name())
-	return o.tpr.CreateAndWait()
+	err := o.tpr.CreateAndWait()
+	if err == nil {
+		logger.Infof("creating TPR: success")
+	}
+	return err
 }
