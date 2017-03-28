@@ -93,8 +93,8 @@ func (o *Operator) handleAddIngress(obj interface{}) {
 		return
 	}
 
-	logp := fmt.Sprintf("handleAddIngress[%d]", atomic.AddUint64(&o.eventCnt, 1))
-	log.Debugf("%s ingress=%+v", logp, ing)
+	logp := fmt.Sprintf("AddIngress[%d]", atomic.AddUint64(&o.eventCnt, 1))
+	log.Debugf("%s obj=%s", logp, ing.Name)
 	defer log.Debugf("%s end", logp)
 
 	hosts := getIngressHosts(ing)
@@ -120,8 +120,8 @@ func (o *Operator) handleDeleteIngress(obj interface{}) {
 		return
 	}
 
-	logp := fmt.Sprintf("handleDeleteIngress[%d]", atomic.AddUint64(&o.eventCnt, 1))
-	log.Debugf("%s ingress=%+v", logp, ing)
+	logp := fmt.Sprintf("DeleteIngress[%d]", atomic.AddUint64(&o.eventCnt, 1))
+	log.Debugf("%s obj=%s", logp, ing.Name)
 	defer log.Debugf("%s end", logp)
 
 	err := o.deleteChecks(logp, ing)
@@ -138,9 +138,9 @@ func (o *Operator) handleUpdateIngress(oldObj, newObj interface{}) {
 		return
 	}
 
-	id := atomic.AddUint64(&o.eventCnt, 1)
-	log.Debugf("handleUpdateIngress[%d] NOT YET IMPLEMENTED old=%+v new=%+v", id, old, new)
-	defer log.Debugf("handleUpdateIngress[%d] end", id)
+	logp := fmt.Sprintf("UpdateIngress[%d]", atomic.AddUint64(&o.eventCnt, 1))
+	log.Debugf("%s NOT YET IMPLEMENTED old=%s new=%s", logp, old.Name, new.Name)
+	defer log.Debugf("%s end", logp)
 }
 
 // Create a check for each host in the Ingress and annotates it

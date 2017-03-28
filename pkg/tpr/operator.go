@@ -55,22 +55,23 @@ func (o *Operator) Run(stopCh <-chan struct{}) error {
 		AddFunc: func(obj interface{}) {
 			check := obj.(*PingdomCheck)
 			id := atomic.AddUint64(&o.eventCnt, 1)
-			logger.Debugf("AddFunc[%d] check=%+v", id, check)
-			defer logger.Debugf("AddFunc[%d] end", id)
+			logger.Debugf("AddPingdomCheck[%d] obj=%s", id, check.Name)
+			defer logger.Debugf("AddPingdomCheck[%d] end", id)
 			o.store.set(check)
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			old, new := oldObj.(*PingdomCheck), newObj.(*PingdomCheck)
 			id := atomic.AddUint64(&o.eventCnt, 1)
-			logger.Debugf("UpdateFunc[%d]: old=%+v new=%+v", id, old, new)
-			defer logger.Debugf("UpdateFunc[%d] end", id)
+			logger.Debugf("UpdatePingdomCheck[%d] old=%s new=%s", id,
+				old.Name, new.Name)
+			defer logger.Debugf("UpdatePingdomCheck[%d] end", id)
 			o.store.set(new)
 		},
 		DeleteFunc: func(obj interface{}) {
 			check := obj.(*PingdomCheck)
 			id := atomic.AddUint64(&o.eventCnt, 1)
-			logger.Debugf("DeleteFund[%d] check=%+v", id, check)
-			defer logger.Debugf("DeleteFund[%d] end", id)
+			logger.Debugf("DeletePingdomCheck[%d] obj=%s", id, check.Name)
+			defer logger.Debugf("DeletePingdomCheck[%d] end", id)
 			o.store.delete(check)
 		},
 	})
