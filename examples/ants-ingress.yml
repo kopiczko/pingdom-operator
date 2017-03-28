@@ -1,0 +1,16 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: ants
+  annotations:
+    ingress.kubernetes.io/rewrite-target: /
+    monitoring.rossfairbanks.com/pingdom: "notexist"
+spec:
+  rules:
+  - host: ants.minikube.info
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: echoserver
+          servicePort: 80

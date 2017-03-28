@@ -1,0 +1,6 @@
+apiVersion: "pingdom.example.com/v1aplpha1"
+kind: Check
+metadata:
+  name: check5
+spec:
+  retryInterval: 5

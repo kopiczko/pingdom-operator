@@ -34,6 +34,8 @@ $ kubectl apply -f pingdom-secret.yaml
 $ kubectl apply -f deployment.yaml
 ```
 
+Operator will also create a Third Party Resource upon start.
+
 ## Building
 
 Build the Go binary and Docker image. Developed using Go 1.7 and Kubernetes
@@ -41,22 +43,6 @@ Build the Go binary and Docker image. Developed using Go 1.7 and Kubernetes
 
 ```
 $ make
-```
-
-## Enhancements - Pingdom third party resource
-
-In a later version a Pingdom third party resource could be used
-to configure the Pingdom checks.
-
-e.g.
-
-```
-apiVersion: "pingdom.monitoring.rossfairbanks.com/v1alpha1"
-kind: Pingdom
-metadata:
-  name: pets
-spec:
-  checkIntervalMins: 2
 ```
 
 ## Run tests
