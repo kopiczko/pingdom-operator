@@ -147,10 +147,8 @@ func (t *tpr) create() error {
 		Description: t.description,
 	}
 	_, err := t.clientset.ExtensionsV1beta1().ThirdPartyResources().Create(tpr)
-	if err != nil {
-		if !errors.IsAlreadyExists(err) {
-			return err
-		}
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
 	}
 	return nil
 }
