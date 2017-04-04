@@ -15,7 +15,7 @@ const (
 
 	tprKind        = "check"
 	tprGroup       = "pingdom.example.com"
-	tprVersion     = "v1aplpha1"
+	tprVersion     = "v1alpha1"
 	tprDescription = "Managed Pingdom uptime checks for Ingress hosts"
 )
 

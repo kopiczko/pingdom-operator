@@ -1,4 +1,4 @@
-apiVersion: "pingdom.example.com/v1aplpha1"
+apiVersion: "pingdom.example.com/v1alpha1"
 kind: Check
 metadata:
   name: check5

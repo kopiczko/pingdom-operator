@@ -11,14 +11,14 @@ import (
 
 var data = `{
 	"kind":"CheckList","items":[],
-	"metadata":{"selfLink":"/apis/example.com/v1aplpha1/testkinds","resourceVersion":"319773"},
-	"apiVersion":"example.com/v1aplpha1"
+	"metadata":{"selfLink":"/apis/example.com/v1alpha1/testkinds","resourceVersion":"319773"},
+	"apiVersion":"example.com/v1alpha1"
 }`
 
 func TestPingdomCheckUnmarshal(t *testing.T) {
 	want := &PingdomCheckList{
-		TypeMeta: unversioned.TypeMeta{Kind: "CheckList", APIVersion: "example.com/v1aplpha1"},
-		ListMeta: unversioned.ListMeta{SelfLink: "/apis/example.com/v1aplpha1/testkinds", ResourceVersion: "319773"},
+		TypeMeta: unversioned.TypeMeta{Kind: "CheckList", APIVersion: "example.com/v1alpha1"},
+		ListMeta: unversioned.ListMeta{SelfLink: "/apis/example.com/v1alpha1/testkinds", ResourceVersion: "319773"},
 		Items:    []*PingdomCheck{},
 	}
 	v := new(PingdomCheckList)
