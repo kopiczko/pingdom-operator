@@ -92,6 +92,9 @@ func (o *Operator) handleAddIngress(obj interface{}) {
 	if !ok {
 		return
 	}
+	if hasChecks(ing) {
+		return
+	}
 
 	logp := fmt.Sprintf("AddIngress[%d]", atomic.AddUint64(&o.eventCnt, 1))
 	log.Debugf("%s obj=%s", logp, ing.Name)
@@ -206,6 +209,11 @@ func (o *Operator) deleteChecks(logp string, ing *v1beta1.Ingress) error {
 func annotation(ing *v1beta1.Ingress) (v string, ok bool) {
 	v, ok = ing.ObjectMeta.Annotations[pingdomAnnotation]
 	return
+}
+
+func hasChecks(ing *v1beta1.Ingress) bool {
+	v, _ := ing.ObjectMeta.Annotations[checksAnnotation]
+	return len(v) > 0
 }
 
 // Returns Ingress hosts
