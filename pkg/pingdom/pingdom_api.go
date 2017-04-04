@@ -1,6 +1,8 @@
 package pingdom
 
 import (
+	"fmt"
+
 	"github.com/rossf7/pingdom-operator/pkg/tpr"
 	pdom "github.com/russellcardullo/go-pingdom/pingdom"
 )
@@ -19,6 +21,22 @@ func (c *Operator) createCheck(host string, checkSpec tpr.Spec) (int, error) {
 		return -1, err
 	}
 	return check.ID, nil
+}
+
+// Updates a HTTP check.
+func (c *Operator) updateCheck(id int, checkSpec tpr.Spec) error {
+	r, err := c.pclient.Checks.Read(id)
+	if err != nil {
+		return fmt.Errorf("reading check with id:%d: %v", id, err)
+	}
+	hc := pdom.HttpCheck{
+		Name:                     r.Name,
+		Hostname:                 r.Hostname,
+		Resolution:               checkSpec.Resolution,
+		SendNotificationWhenDown: r.SendNotificationWhenDown,
+	}
+	_, err = c.pclient.Checks.Update(id, &hc)
+	return err
 }
 
 // Deletes the HTTP check.
